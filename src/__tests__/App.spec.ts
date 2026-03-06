@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
+import { createHead } from '@unhead/vue/client'
 import App from '../App.vue'
 import HomePage from '../views/HomePage.vue'
 
@@ -17,7 +18,7 @@ describe('App', () => {
 
     const wrapper = mount(App, {
       global: {
-        plugins: [router],
+        plugins: [router, createHead()],
       },
     })
 
