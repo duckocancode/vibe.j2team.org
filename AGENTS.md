@@ -86,6 +86,15 @@ Read `docs/DESIGN_SYSTEM.md` before making any visual changes.
 - Use `pnpm` as package manager (not npm/yarn)
 - Vietnamese text must use diacritics (tiếng Việt có dấu)
 
+## Pre-Implementation Checklist
+
+Before implementing any new feature or sub-page, agents MUST:
+
+1. **Check local `src/views/`** — List existing directories in `src/views/` to see if the same or similar page already exists locally
+2. **Check existing pages on main branch** — Browse https://github.com/J2TEAM/vibe.j2team.org/tree/main/src/views to see if someone has already built the same or similar feature
+3. **Check open Pull Requests** — Browse https://github.com/J2TEAM/vibe.j2team.org/pulls to see if someone is already working on it
+4. **Only proceed if no duplicates found** — If the feature already exists locally, on main, or in an open PR, report back to the user instead of building a duplicate
+
 ## Rules
 
 1. **No database** — the project does not use any database in any form
