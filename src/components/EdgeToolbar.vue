@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-
+import { useTimeoutFn } from '@vueuse/core'
 import { Icon } from '@iconify/vue'
 import { REPO_URL } from '@/data/constants'
 import { useFavorites } from '@/composables/useFavorites'
@@ -16,22 +16,34 @@ const { toggleFavorite, isFavorite } = useFavorites()
 const isDismissed = ref(false)
 const isOpen = ref(false)
 const isAnimating = ref(false)
-let hideTimeout: ReturnType<typeof setTimeout> | undefined
+
+const { start: startHideTimer, stop: stopHideTimer } = useTimeoutFn(
+  () => {
+    isOpen.value = false
+  },
+  300,
+  { immediate: false },
+)
+
+const { start: startAnimatingTimer, stop: stopAnimatingTimer } = useTimeoutFn(
+  () => {
+    isAnimating.value = false
+  },
+  500,
+  { immediate: false },
+)
 
 const sourceUrl = computed(() => `${REPO_URL}/tree/main/src/views${props.pagePath}`)
 
 const favorited = computed(() => isFavorite(props.pagePath))
 
 function show() {
-  clearTimeout(hideTimeout)
+  stopHideTimer()
   isOpen.value = true
 }
 
 function scheduleHide() {
-  clearTimeout(hideTimeout)
-  hideTimeout = setTimeout(() => {
-    isOpen.value = false
-  }, 300)
+  startHideTimer()
 }
 
 function toggle() {
@@ -46,10 +58,9 @@ function handleFavorite() {
   const willBeFavorite = !favorited.value
   toggleFavorite(props.pagePath)
   if (willBeFavorite) {
+    stopAnimatingTimer()
     isAnimating.value = true
-    setTimeout(() => {
-      isAnimating.value = false
-    }, 500)
+    startAnimatingTimer()
   }
 }
 
