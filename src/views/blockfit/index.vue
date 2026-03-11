@@ -782,6 +782,7 @@ const resetNotice = ref(false)
 let resetNoticeTimer: ReturnType<typeof setTimeout> | null = null
 const randomNotice = ref(false)
 let randomNoticeTimer: ReturnType<typeof setTimeout> | null = null
+const showSolutionConfirm = ref(false)
 const lastScore = ref(0)
 const lastMultiplier = ref(1)
 let timerInterval: ReturnType<typeof setInterval> | null = null
@@ -1541,8 +1542,10 @@ function startDragFromPalette(e: MouseEvent | TouchEvent, idx: number) {
   document.addEventListener('touchcancel', endHandler)
 }
 
+let solutionDragSnapshot: { anchor: [number, number]; rotation: number } | null = null
+
 function startDragFromBoard(e: MouseEvent | TouchEvent, idx: number, r: number, c: number) {
-  if (timerExpired.value || showPause.value || showingSolution.value) return
+  if (timerExpired.value || showPause.value) return
   if (drag.value) return // already dragging
   // If this piece is mid-rotation, finalize it instantly before dragging
   if (pendingRotation?.idx === idx) commitPendingRotation()
@@ -1561,6 +1564,13 @@ function startDragFromBoard(e: MouseEvent | TouchEvent, idx: number, r: number, 
   if (p) {
     grabDr = r - p.anchor[0]
     grabDc = c - p.anchor[1]
+  }
+
+  // In solution mode, save the piece's current position so we can restore it on release
+  if (showingSolution.value && p) {
+    solutionDragSnapshot = { anchor: [...p.anchor] as [number, number], rotation: p.rotation }
+  } else {
+    solutionDragSnapshot = null
   }
 
   drag.value = {
@@ -1654,17 +1664,17 @@ function ejectToPalette(d: DragState) {
 function onUp(e: MouseEvent | TouchEvent) {
   if (!drag.value) return
 
-  // Tap on board piece → select or rotate
+  // Tap on board piece → select or rotate (disabled in solution mode)
   if (!drag.value.hasMoved && boardDragPieceIdx >= 0 && !boardDragIsOutOfGrid) {
-    if (selectedPieceIdx.value === boardDragPieceIdx) {
-      // Already selected → rotate
-      rotatePlacedPiece(boardDragPieceIdx)
-      // Keep selected after rotate
-    } else {
-      // Select this piece
-      sfx.select()
-      selectedPieceIdx.value = boardDragPieceIdx
+    if (!showingSolution.value) {
+      if (selectedPieceIdx.value === boardDragPieceIdx) {
+        rotatePlacedPiece(boardDragPieceIdx)
+      } else {
+        sfx.select()
+        selectedPieceIdx.value = boardDragPieceIdx
+      }
     }
+    solutionDragSnapshot = null
     drag.value = null
     boardDragPieceIdx = -1
     return
@@ -1673,6 +1683,18 @@ function onUp(e: MouseEvent | TouchEvent) {
   if (drag.value.hasMoved) {
     if (e instanceof MouseEvent) {
       drag.value = { ...drag.value, x: e.clientX, y: e.clientY }
+    }
+
+    // Solution mode: always snap piece back to its original position
+    if (showingSolution.value && solutionDragSnapshot) {
+      placed.value[drag.value.pieceIdx] = {
+        anchor: solutionDragSnapshot.anchor,
+        rotation: solutionDragSnapshot.rotation,
+      }
+      solutionDragSnapshot = null
+      drag.value = null
+      boardDragPieceIdx = -1
+      return
     }
 
     if (!isOverBoard()) {
@@ -1705,12 +1727,13 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 function onCellDown(e: MouseEvent | TouchEvent, r: number, c: number) {
-  if (timerExpired.value || showPause.value || showingSolution.value) return
+  if (timerExpired.value || showPause.value) return
   const pieceIdx = coverage.value[r]?.[c] ?? -1
   if (pieceIdx < 0) {
-    // Tapped empty cell → deselect
-    sfx.click()
-    selectedPieceIdx.value = -1
+    if (!showingSolution.value) {
+      sfx.click()
+      selectedPieceIdx.value = -1
+    }
     return
   }
   e.preventDefault()
@@ -2448,6 +2471,17 @@ watch(won, (w) => {
             </div>
           </Transition>
 
+          <!-- Solution mode banner -->
+          <div
+            v-if="showingSolution"
+            class="flex items-center justify-center gap-2 px-4 py-2 bg-accent-amber/10 border-b border-accent-amber/20"
+          >
+            <Icon icon="lucide:eye" class="size-3 text-accent-amber" />
+            <span class="text-accent-amber text-xs font-display tracking-wide"
+              >Chế độ xem đáp án — bấm chơi lại ở góc phải</span
+            >
+          </div>
+
           <!-- Timer bar -->
           <div class="relative border-b border-border-default/30">
             <div
@@ -3019,15 +3053,42 @@ watch(won, (w) => {
               </button>
             </div>
             <button
-              v-if="level.solution"
+              v-if="level.solution && !showSolutionConfirm"
               class="w-full border-2 border-accent-amber/40 px-4 py-2 font-display text-xs tracking-wider text-accent-amber/60 uppercase transition-all hover:border-accent-amber hover:text-accent-amber active:scale-95"
               @click="
                 sfx.click();
-                showSolution()
+                currentStreak > 0 ? (showSolutionConfirm = true) : showSolution()
               "
             >
               <Icon icon="lucide:eye" class="size-3 inline-block mr-1 -mt-0.5" />Xem đáp án
             </button>
+            <div v-if="showSolutionConfirm" class="w-full flex flex-col gap-2">
+              <div class="text-center text-accent-amber text-xs font-display">
+                Chuỗi thắng
+                <span class="font-bold">{{ currentStreak }}</span> sẽ bị mất
+              </div>
+              <div class="flex gap-2">
+                <button
+                  class="flex-1 border-2 border-border-default px-3 py-1.5 font-display text-xs tracking-wider text-text-dim uppercase transition-all hover:border-text-dim hover:text-text-secondary active:scale-95"
+                  @click="
+                    sfx.click();
+                    showSolutionConfirm = false
+                  "
+                >
+                  Hủy
+                </button>
+                <button
+                  class="flex-1 border-2 border-accent-amber/40 px-3 py-1.5 font-display text-xs tracking-wider text-accent-amber uppercase transition-all hover:border-accent-amber hover:text-accent-amber active:scale-95"
+                  @click="
+                    sfx.click();
+                    showSolutionConfirm = false;
+                    showSolution()
+                  "
+                >
+                  Xem đáp án
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
