@@ -218,11 +218,12 @@ const updateBackground = () => {
       return
     }
     const img = new Image()
+    const src = formats[index] as string
     img.onload = () => {
-      currentBackground.value = formats[index]
+      currentBackground.value = src
     }
     img.onerror = () => tryLoad(index + 1)
-    img.src = formats[index]
+    img.src = src
   }
   tryLoad(0)
 }
