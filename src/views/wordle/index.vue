@@ -3,10 +3,10 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useLocalStorage } from '@vueuse/core'
-import { getDailyWord, getTodayKey, VALID_WORDS } from './words'
+import { getDailyWord, getTodayKey, toBase } from './words'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const WORD_LENGTH = 6
+const WORD_LENGTH = 5
 const MAX_GUESSES = 6
 const REVEAL_MS = 250
 
@@ -51,14 +51,14 @@ function evaluate(guess: string): LetterState[] {
   const used = Array(WORD_LENGTH).fill(false)
 
   g.forEach((ch, i) => {
-    if (ch === a[i]) {
+    if (toBase(ch) === toBase(a[i]!)) {
       result[i] = 'correct'
       used[i] = true
     }
   })
   g.forEach((ch, i) => {
     if (result[i] === 'correct') return
-    const j = a.findIndex((ac, ai) => !used[ai] && ac === ch)
+    const j = a.findIndex((ac, ai) => !used[ai] && toBase(ac) === toBase(ch))
     if (j !== -1) {
       result[i] = 'present'
       used[j] = true
@@ -69,15 +69,18 @@ function evaluate(guess: string): LetterState[] {
 
 const evaluations = computed(() => saved.value.guesses.map(evaluate))
 
+// Key states indexed by base char so both on-screen (toned) and physical (base)
+// keyboard keys light up correctly.
 const keyStates = computed<Record<string, LetterState>>(() => {
   const map: Record<string, LetterState> = {}
   saved.value.guesses.forEach((guess, gi) => {
     ;[...guess].forEach((ch, ci) => {
+      const key = toBase(ch) // normalise so 'ề' and 'e' share the same slot
       const s = evaluations.value[gi]![ci]!
-      const prev = map[ch]
+      const prev = map[key]
       if (prev === 'correct') return
       if (prev === 'present' && s !== 'correct') return
-      map[ch] = s
+      map[key] = s
     })
   })
   return map
@@ -115,13 +118,6 @@ function submitGuess() {
     return
   }
 
-  if (!VALID_WORDS.includes(input)) {
-    showError('Từ không có trong danh sách!')
-    shakeRow.value = row
-    setTimeout(() => (shakeRow.value = null), 600)
-    return
-  }
-
   saved.value.guesses = [...saved.value.guesses, input]
   currentInput.value = ''
 
@@ -137,7 +133,7 @@ function submitGuess() {
   setTimeout(
     () => {
       revealingRow.value = null
-      const won = input === answer
+      const won = toBase(input) === toBase(answer)
       const lost = !won && saved.value.guesses.length >= MAX_GUESSES
       if (won) saved.value.status = 'won'
       if (lost) saved.value.status = 'lost'
@@ -149,9 +145,11 @@ function submitGuess() {
 
 // ─── Physical keyboard ────────────────────────────────────────────────────────
 function onKeydown(e: KeyboardEvent) {
-  if (e.metaKey || e.ctrlKey) return
+  if (e.metaKey || e.ctrlKey || e.altKey) return
   if (e.key === 'Enter') submitGuess()
   else if (e.key === 'Backspace') removeChar()
+  // Accept any single letter — includes plain a-z and Vietnamese chars if IME active
+  else if (e.key.length === 1 && /\p{L}/u.test(e.key)) addChar(e.key.toLowerCase())
 }
 
 onMounted(() => {
@@ -161,8 +159,14 @@ onMounted(() => {
   saved.value.guesses.forEach((_, i) => {
     revealedUpTo.value[i] = WORD_LENGTH - 1
   })
+  // Start countdown
+  updateCountdown()
+  countdownTimer = setInterval(updateCountdown, 1000)
 })
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  if (countdownTimer) clearInterval(countdownTimer)
+})
 
 // ─── Tile helpers ─────────────────────────────────────────────────────────────
 function tileChar(row: number, col: number): string {
@@ -221,12 +225,28 @@ const VOWEL_SECTIONS = [
 ]
 
 function keyClass(ch: string): string {
-  const s = keyStates.value[ch]
+  const s = keyStates.value[toBase(ch)]
   if (s === 'correct') return 'bg-accent-coral border-accent-coral text-bg-deep font-bold'
   if (s === 'present') return 'bg-accent-amber border-accent-amber text-bg-deep font-bold'
   if (s === 'absent') return 'bg-bg-elevated border-bg-elevated text-text-dim'
   return 'bg-bg-surface border-border-default text-text-primary hover:border-accent-coral hover:text-accent-coral'
 }
+
+// ─── Countdown to midnight ────────────────────────────────────────────────────
+const countdown = ref('')
+
+function updateCountdown() {
+  const now = new Date()
+  const midnight = new Date(now)
+  midnight.setHours(24, 0, 0, 0)
+  const diff = midnight.getTime() - now.getTime()
+  const h = Math.floor(diff / 3_600_000)
+  const m = Math.floor((diff % 3_600_000) / 60_000)
+  const s = Math.floor((diff % 60_000) / 1_000)
+  countdown.value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 // ─── Share ────────────────────────────────────────────────────────────────────
 const guessCount = computed(() => saved.value.guesses.length)
@@ -251,7 +271,7 @@ async function copyShare() {
   <div class="min-h-screen bg-bg-deep text-text-primary font-body flex flex-col">
     <!-- ── Header ─────────────────────────────────────────────────────── -->
     <header class="border-b border-border-default shrink-0">
-      <div class="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="max-w-xl mx-auto px-4 py-3 relative flex items-center justify-between">
         <RouterLink
           to="/"
           class="text-text-secondary hover:text-text-primary transition text-sm flex items-center gap-1.5"
@@ -259,15 +279,24 @@ async function copyShare() {
           <Icon icon="lucide:arrow-left" class="size-4" />
           Về trang chủ
         </RouterLink>
-        <h1 class="font-display font-bold text-base tracking-widest text-accent-coral">
+        <h1
+          class="font-display font-bold text-base tracking-widest text-accent-coral absolute left-1/2 -translate-x-1/2"
+        >
           WORDLE TIẾNG VIỆT
         </h1>
         <button
-          class="text-text-secondary hover:text-text-primary transition flex items-center gap-1.5"
+          class="text-text-secondary hover:text-text-primary transition flex items-center gap-1.5 ml-auto"
           @click="showModal = true"
         >
           <Icon icon="lucide:bar-chart-2" class="size-4" />
         </button>
+      </div>
+      <!-- Countdown bar -->
+      <div class="border-t border-border-default bg-bg-surface py-1.5 text-center">
+        <span class="text-text-dim text-xs tracking-wide">Từ mới sau </span>
+        <span class="font-display font-bold text-sm text-text-primary tracking-widest">{{
+          countdown
+        }}</span>
       </div>
     </header>
 
@@ -424,9 +453,12 @@ async function copyShare() {
             </button>
           </div>
 
-          <p v-if="saved.status !== 'playing'" class="text-text-dim text-xs text-center mt-4">
-            Từ mới lúc nửa đêm ✦
-          </p>
+          <div v-if="saved.status !== 'playing'" class="mt-4 text-center">
+            <p class="text-text-dim text-xs mb-1">Từ mới sau</p>
+            <p class="font-display font-bold text-xl text-text-primary tracking-widest">
+              {{ countdown }}
+            </p>
+          </div>
         </div>
       </div>
     </Transition>
