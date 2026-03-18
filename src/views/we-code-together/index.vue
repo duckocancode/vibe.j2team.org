@@ -2,7 +2,8 @@
 import { ref, onMounted, watch, nextTick, shallowRef } from 'vue' // Add shallowRef
 import { Icon } from '@iconify/vue'
 import { useClipboard } from '@vueuse/core'
-import { createHighlighter, type Highlighter } from 'shiki' // Import the 'Highlighter' type
+import { createHighlighterCore, type HighlighterCore } from 'shiki/core'
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript'
 
 // 1. STATE
 const code = ref('// Start coding...')
@@ -10,7 +11,7 @@ const highlightedHtml = ref('')
 const { copy, copied } = useClipboard()
 
 // Use shallowRef and the proper Highlighter type instead of 'any'
-const highlighter = shallowRef<Highlighter | null>(null)
+const highlighter = shallowRef<HighlighterCore | null>(null)
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const preContainerRef = ref<HTMLDivElement | null>(null)
@@ -18,9 +19,18 @@ const gutterRef = ref<HTMLDivElement | null>(null)
 
 onMounted(async () => {
   // Switching to 'vitesse-dark' for much better colors
-  highlighter.value = await createHighlighter({
-    themes: ['vitesse-dark'],
-    langs: ['typescript', 'javascript', 'html', 'css', 'java', 'python', 'json'],
+  highlighter.value = await createHighlighterCore({
+    themes: [import('@shikijs/themes/vitesse-dark')],
+    langs: [
+      import('@shikijs/langs/typescript'),
+      import('@shikijs/langs/javascript'),
+      import('@shikijs/langs/html'),
+      import('@shikijs/langs/css'),
+      import('@shikijs/langs/java'),
+      import('@shikijs/langs/python'),
+      import('@shikijs/langs/json'),
+    ],
+    engine: createJavaScriptRegexEngine(),
   })
   updateHighlight()
 

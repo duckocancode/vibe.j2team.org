@@ -11,8 +11,14 @@ const html = ref('')
 watchEffect(async () => {
   const code = algorithmCode[props.algorithm as keyof typeof algorithmCode] ?? ''
 
-  const { codeToHtml } = await import('shiki')
-  html.value = await codeToHtml(code, {
+  const { createHighlighterCore } = await import('shiki/core')
+  const { createJavaScriptRegexEngine } = await import('shiki/engine/javascript')
+  const highlighter = await createHighlighterCore({
+    themes: [import('@shikijs/themes/github-dark')],
+    langs: [import('@shikijs/langs/javascript')],
+    engine: createJavaScriptRegexEngine(),
+  })
+  html.value = highlighter.codeToHtml(code, {
     lang: 'javascript',
     theme: 'github-dark',
   })
