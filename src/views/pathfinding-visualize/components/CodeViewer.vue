@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, watchEffect } from 'vue'
-import { codeToHtml } from 'shiki'
 import { algorithmCode } from '../data/algorithmCode'
 
 const props = defineProps<{
@@ -12,6 +11,7 @@ const html = ref('')
 watchEffect(async () => {
   const code = algorithmCode[props.algorithm as keyof typeof algorithmCode] ?? ''
 
+  const { codeToHtml } = await import('shiki')
   html.value = await codeToHtml(code, {
     lang: 'javascript',
     theme: 'github-dark',
