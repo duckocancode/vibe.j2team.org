@@ -491,7 +491,7 @@ const withdrawalRateOptions = [3, 3.5, 4, 4.5, 5]
         </div>
         <div class="flex justify-between text-[11px] text-text-dim font-mono mt-2">
           <span>Năm 0</span>
-          <span>Năm {{ chartPoints.at(-1)?.year }}</span>
+          <span>Năm {{ chartPoints[chartPoints.length - 1]?.year }}</span>
         </div>
       </section>
 
