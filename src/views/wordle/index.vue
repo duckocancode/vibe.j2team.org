@@ -19,9 +19,9 @@ interface GameState {
   date: string
 }
 
-// ─── Daily word ───────────────────────────────────────────────────────────────
+// ─── Daily word (loaded lazily from /wordle/words.json) ───────────────────────
 const todayKey = getTodayKey()
-const answer = getDailyWord().normalize('NFC')
+const answer = ref('')
 
 // ─── Persistent state ─────────────────────────────────────────────────────────
 const saved = useLocalStorage<GameState>('wordle-vn-v1', {
@@ -46,7 +46,7 @@ const showModal = ref(false)
 // ─── Evaluation ───────────────────────────────────────────────────────────────
 function evaluate(guess: string): LetterState[] {
   const g = [...guess]
-  const a = [...answer]
+  const a = [...answer.value]
   const result: LetterState[] = Array(WORD_LENGTH).fill('absent')
   const used = Array(WORD_LENGTH).fill(false)
 
@@ -133,7 +133,7 @@ function submitGuess() {
   setTimeout(
     () => {
       revealingRow.value = null
-      const won = toBase(input) === toBase(answer)
+      const won = toBase(input) === toBase(answer.value)
       const lost = !won && saved.value.guesses.length >= MAX_GUESSES
       if (won) saved.value.status = 'won'
       if (lost) saved.value.status = 'lost'
@@ -152,7 +152,8 @@ function onKeydown(e: KeyboardEvent) {
   else if (e.key.length === 1 && /\p{L}/u.test(e.key)) addChar(e.key.toLowerCase())
 }
 
-onMounted(() => {
+onMounted(async () => {
+  answer.value = await getDailyWord()
   window.addEventListener('keydown', onKeydown)
   if (saved.value.status !== 'playing') setTimeout(() => (showModal.value = true), 400)
   // Restore reveal state for already-played rows
