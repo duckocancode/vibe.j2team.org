@@ -551,6 +551,18 @@ const cssOutput = computed(() => {
 
 const showCss = ref(false)
 const showExport = ref(false)
+function toggleCss() {
+  showCss.value = !showCss.value
+  showExport.value = false
+}
+function toggleExport() {
+  showExport.value = !showExport.value
+  showCss.value = false
+}
+function selectPreset(w: number) {
+  exportWidth.value = w
+  useCustomWidth.value = false
+}
 const copied = ref(false)
 async function copyCSS() {
   await navigator.clipboard.writeText(cssOutput.value)
@@ -662,10 +674,7 @@ function downloadPNG() {
               ? 'border-accent-amber text-accent-amber bg-accent-amber/10'
               : 'border-border-default text-text-secondary hover:border-accent-amber/50'
           "
-          @click="
-            showCss = !showCss
-            showExport = false
-          "
+          @click="toggleCss"
         >
           <Icon icon="lucide:code-2" class="size-3" />
           CSS
@@ -683,10 +692,7 @@ function downloadPNG() {
               ? 'border-accent-sky text-accent-sky bg-accent-sky/10'
               : 'border-border-default text-text-secondary hover:border-accent-sky/50'
           "
-          @click="
-            showExport = !showExport
-            showCss = false
-          "
+          @click="toggleExport"
         >
           <Icon icon="lucide:download" class="size-3" />
           Export
@@ -797,10 +803,7 @@ function downloadPNG() {
                       ? 'border-accent-sky text-accent-sky bg-accent-sky/10'
                       : 'border-border-default text-text-dim hover:border-accent-sky/50'
                   "
-                  @click="
-                    exportWidth = ep.w
-                    useCustomWidth = false
-                  "
+                  @click="selectPreset(ep.w)"
                 >
                   {{ ep.label }}
                 </button>
