@@ -1,6 +1,21 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import * as engine from '../engine'
+import {
+  calc,
+  convertUnit,
+  cycleAngleMode,
+  decToDMS,
+  formatResult,
+  getAngleMode,
+  getVar,
+  setVar,
+  solve,
+  toFraction,
+  toMixedFraction,
+  verify,
+  SCIENTIFIC_CONSTANTS,
+  UNIT_CONVERSIONS,
+} from '../engine'
 import type { AngleMode, HistoryEntry } from '../types'
 import CalcKeyboard from './CalcKeyboard.vue'
 
@@ -14,7 +29,7 @@ const isResult = ref(false)
 const isError = ref(false)
 
 // ── UI State ──
-const angleMode = ref<AngleMode>(engine.getAngleMode())
+const angleMode = ref<AngleMode>(getAngleMode())
 const showTools = ref(false)
 const showVars = ref(false)
 const showHist = ref(false)
@@ -52,10 +67,10 @@ const formattedResult = computed(() => {
   if (isError.value || !isResult.value) return resultText.value
   const raw = lastRaw.value
   if (fmt.value === 'frac') {
-    const f = engine.toFraction(raw)
+    const f = toFraction(raw)
     if (f) return `${f.num}⁄${f.den}`
   } else if (fmt.value === 'mixed') {
-    const m = engine.toMixedFraction(raw)
+    const m = toMixedFraction(raw)
     if (m) return `${m.whole} ${m.num}⁄${m.den}`
   }
   return resultText.value
@@ -216,7 +231,7 @@ function clearAll() {
 function doEval() {
   const s = expr.value.trim()
   if (!s) return
-  const r = engine.calc(s)
+  const r = calc(s)
   if (r.ok) {
     history.value.unshift({ expr: s, result: r.value, raw: r.raw })
     if (history.value.length > 100) history.value.pop()
@@ -242,7 +257,7 @@ function toggleFmt() {
 
 // ── Angle mode ──
 function toggleAngle() {
-  angleMode.value = engine.cycleAngleMode()
+  angleMode.value = cycleAngleMode()
 }
 
 // ── Variables ──
@@ -254,7 +269,7 @@ function insertVar(n: string) {
 }
 
 function storeVar(n: string) {
-  if (isResult.value) engine.setVar(n, lastRaw.value)
+  if (isResult.value) setVar(n, lastRaw.value)
   showVars.value = false
 }
 
@@ -264,7 +279,7 @@ function onAlphaInput(varName: string) {
 }
 
 function onStoreVar(varName: string) {
-  if (isResult.value) engine.setVar(varName, lastRaw.value)
+  if (isResult.value) setVar(varName, lastRaw.value)
 }
 
 // ── Memory ──
@@ -334,13 +349,13 @@ function onOptn() {
 
 function doSolve() {
   showTools.value = false
-  const r = engine.solve(expr.value, 'X')
+  const r = solve(expr.value, 'X')
   if (r.ok) {
     resultText.value = `X = ${r.value}`
     lastRaw.value = r.raw
     isResult.value = true
     isError.value = false
-    engine.setVar('X', r.raw)
+    setVar('X', r.raw)
   } else {
     resultText.value = r.error
     isError.value = true
@@ -350,7 +365,7 @@ function doSolve() {
 
 function doVerify() {
   showTools.value = false
-  const r = engine.verify(expr.value)
+  const r = verify(expr.value)
   if (r) {
     resultText.value = r.result ? 'TRUE' : 'FALSE'
     isResult.value = true
@@ -363,18 +378,18 @@ function doVerify() {
 
 function doDMS() {
   showTools.value = false
-  if (isResult.value) resultText.value = engine.decToDMS(lastRaw.value)
+  if (isResult.value) resultText.value = decToDMS(lastRaw.value)
 }
 
 // ── Constants & Conversions ──
 const filteredConsts = computed(() => {
   const q = constFilter.value.toLowerCase()
-  return engine.SCIENTIFIC_CONSTANTS.filter(
+  return SCIENTIFIC_CONSTANTS.filter(
     (c) => !q || c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q),
   )
 })
 const constCategories = computed(() => {
-  const map = new Map<string, typeof engine.SCIENTIFIC_CONSTANTS>()
+  const map = new Map<string, typeof SCIENTIFIC_CONSTANTS>()
   for (const c of filteredConsts.value) {
     const arr = map.get(c.category) ?? []
     arr.push(c)
@@ -390,7 +405,7 @@ function insertConst(val: number) {
 
 const filteredConvs = computed(() => {
   const q = convFilter.value.toLowerCase()
-  return engine.UNIT_CONVERSIONS.filter(
+  return UNIT_CONVERSIONS.filter(
     (c) =>
       !q ||
       c.from.toLowerCase().includes(q) ||
@@ -399,7 +414,7 @@ const filteredConvs = computed(() => {
   )
 })
 const convCategories = computed(() => {
-  const map = new Map<string, typeof engine.UNIT_CONVERSIONS>()
+  const map = new Map<string, typeof UNIT_CONVERSIONS>()
   for (const c of filteredConvs.value) {
     const arr = map.get(c.category) ?? []
     arr.push(c)
@@ -410,10 +425,10 @@ const convCategories = computed(() => {
 
 function doConvert(from: string, to: string) {
   const v = isResult.value ? lastRaw.value : 0
-  const r = engine.convertUnit(v, from, to)
+  const r = convertUnit(v, from, to)
   if (r != null) {
-    convResult.value = `${engine.formatResult(v)} ${from} = ${engine.formatResult(r)} ${to}`
-    resultText.value = engine.formatResult(r)
+    convResult.value = `${formatResult(v)} ${from} = ${formatResult(r)} ${to}`
+    resultText.value = formatResult(r)
     lastRaw.value = r
     isResult.value = true
   }
@@ -478,7 +493,7 @@ function onMenu() {
             @contextmenu.prevent="storeVar(n)"
           >
             <span class="var-letter">{{ n }}</span>
-            <span class="var-val">{{ engine.getVar(n)?.toFixed(4) ?? '—' }}</span>
+            <span class="var-val">{{ getVar(n)?.toFixed(4) ?? '—' }}</span>
           </button>
         </div>
         <p v-if="isResult" class="store-hint">Chuột phải / nhấn giữ để lưu kết quả</p>

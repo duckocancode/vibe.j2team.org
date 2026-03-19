@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import * as engine from '../engine'
+import { cycleAngleMode, getAngleMode } from '../engine'
 import type { AngleMode } from '../types'
 import CalcKeyboard from './CalcKeyboard.vue'
 
@@ -20,7 +20,7 @@ const histIdx = ref(-1)
 const showOptn = ref(false)
 
 // Angle mode (shared with keyboard)
-const angleMode = ref<AngleMode>(engine.getAngleMode())
+const angleMode = ref<AngleMode>(getAngleMode())
 
 // Undo stack
 const undoStack = ref<{ e: string; c: number }[]>([])
@@ -376,7 +376,7 @@ function onOptn() {
   showOptn.value = true
 }
 function toggleAngle() {
-  angleMode.value = engine.cycleAngleMode()
+  angleMode.value = cycleAngleMode()
 }
 </script>
 
