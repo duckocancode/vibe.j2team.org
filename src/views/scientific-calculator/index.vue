@@ -1,23 +1,66 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, defineAsyncComponent, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import type { CalculatorMode } from './types'
 
 const router = useRouter()
+
+// Default mode — eagerly loaded so it appears instantly on page open
 import CalculateMode from './components/CalculateMode.vue'
-import ComplexMode from './components/ComplexMode.vue'
-import BaseNMode from './components/BaseNMode.vue'
-import MatrixMode from './components/MatrixMode.vue'
-import VectorMode from './components/VectorMode.vue'
-import StatisticsMode from './components/StatisticsMode.vue'
-import DistributionMode from './components/DistributionMode.vue'
-import TableMode from './components/TableMode.vue'
-import EquationMode from './components/EquationMode.vue'
-import InequalityMode from './components/InequalityMode.vue'
-import VerifyMode from './components/VerifyMode.vue'
-import RatioMode from './components/RatioMode.vue'
-import SpreadsheetMode from './components/SpreadsheetMode.vue'
+
+// Loading placeholder shown while a mode chunk is being fetched
+const ModeLoader = { render: () => h('div', { class: 'mode-loader' }, '...') }
+
+// All other modes — lazy-loaded on first use
+const ComplexMode = defineAsyncComponent({
+  loader: () => import('./components/ComplexMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const BaseNMode = defineAsyncComponent({
+  loader: () => import('./components/BaseNMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const MatrixMode = defineAsyncComponent({
+  loader: () => import('./components/MatrixMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const VectorMode = defineAsyncComponent({
+  loader: () => import('./components/VectorMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const StatisticsMode = defineAsyncComponent({
+  loader: () => import('./components/StatisticsMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const DistributionMode = defineAsyncComponent({
+  loader: () => import('./components/DistributionMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const TableMode = defineAsyncComponent({
+  loader: () => import('./components/TableMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const EquationMode = defineAsyncComponent({
+  loader: () => import('./components/EquationMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const InequalityMode = defineAsyncComponent({
+  loader: () => import('./components/InequalityMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const VerifyMode = defineAsyncComponent({
+  loader: () => import('./components/VerifyMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const RatioMode = defineAsyncComponent({
+  loader: () => import('./components/RatioMode.vue'),
+  loadingComponent: ModeLoader,
+})
+const SpreadsheetMode = defineAsyncComponent({
+  loader: () => import('./components/SpreadsheetMode.vue'),
+  loadingComponent: ModeLoader,
+})
 
 const mode = ref<CalculatorMode>('calculate')
 const showMenu = ref(false)
@@ -321,5 +364,18 @@ currentLabel.value = tabs[0]!.label
 }
 .menu-cell:hover .cell-label {
   color: #c8d6e5;
+}
+
+/* ── Mode loading placeholder ── */
+.mode-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--color-text-dim);
+  font-family: var(--font-display, 'Anybody', sans-serif);
+  font-size: 11px;
+  letter-spacing: 2px;
+  opacity: 0.5;
 }
 </style>
