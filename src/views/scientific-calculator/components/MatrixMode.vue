@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { formatResult } from '../engine'
-import * as engine from '../engine'
+import { formatResult, getAngleMode } from '../engine'
 import type { AngleMode } from '../types'
 import CalcKeyboard from './CalcKeyboard.vue'
 
@@ -23,7 +22,7 @@ const errorText = ref('')
 const showEditor = ref(true)
 const showOptn = ref(false)
 
-const angleMode = ref<AngleMode>(engine.getAngleMode())
+const angleMode = ref<AngleMode>(getAngleMode())
 const undoStack = ref<{ e: string; c: number }[]>([])
 
 const exprBefore = computed(() => expr.value.slice(0, cursor.value))

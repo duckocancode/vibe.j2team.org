@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import * as engine from '../engine'
+import { getAngleMode } from '../engine'
 import type { AngleMode } from '../types'
 import CalcKeyboard from './CalcKeyboard.vue'
 
@@ -15,7 +15,7 @@ const isResult = ref(false)
 const isError = ref(false)
 const showOptn = ref(false)
 
-const angleMode = ref<AngleMode>(engine.getAngleMode())
+const angleMode = ref<AngleMode>(getAngleMode())
 
 const DIGITS: Record<Base, string> = {
   BIN: '01',
