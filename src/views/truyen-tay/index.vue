@@ -4,8 +4,16 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useRafFn, useWindowSize } from '@vueuse/core'
 import { Icon } from '@iconify/vue'
 
-const JSONBIN_KEY = '$2a$10$CzStk5SFJpTMiInkc4aEvun3xw305p98R7dTmUjTWMNdJxpn6mNjW'
-const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b'
+// Supabase anon key — intentionally public, security enforced by Row Level Security policies
+const SUPABASE_URL = 'https://brmumezhzfiufcvqgqra.supabase.co'
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJybXVtZXpoemZpdWZjdnFncXJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NDY5NTgsImV4cCI6MjA4OTUyMjk1OH0.QZD6x73wX2NPdDKzeGJp4NZ5bdNEVYGi-42F6lQhPjM'
+const API_HEADERS = {
+  apikey: SUPABASE_ANON_KEY,
+  Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+  'Content-Type': 'application/json',
+  Prefer: 'return=representation',
+}
 const RADIUS = 12
 
 interface Hop {
@@ -26,7 +34,7 @@ const router = useRouter()
 const { width: svgW, height: svgH } = useWindowSize()
 
 const hops = ref<Hop[]>([])
-const binId = ref('')
+const chainId = ref('')
 const comment = ref('')
 const loading = ref(true)
 const sharing = ref(false)
@@ -102,36 +110,30 @@ useRafFn(() => {
 })
 
 async function createChain(): Promise<string> {
-  const res = await fetch(JSONBIN_BASE, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/truyen_tay_chains`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Master-Key': JSONBIN_KEY,
-      'X-Bin-Private': 'false',
-    },
+    headers: API_HEADERS,
     body: JSON.stringify({ hops: [] }),
   })
   if (!res.ok) throw new Error('Không thể tạo chain')
   const data = await res.json()
-  return data.metadata.id as string
+  return data[0].id as string
 }
 
 async function fetchChain(id: string): Promise<Hop[]> {
-  const res = await fetch(`${JSONBIN_BASE}/${id}/latest`, {
-    headers: { 'X-Master-Key': JSONBIN_KEY },
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/truyen_tay_chains?id=eq.${id}&select=hops`, {
+    headers: API_HEADERS,
   })
   if (!res.ok) throw new Error('Không tìm thấy chain')
   const data = await res.json()
-  return (data.record?.hops ?? []) as Hop[]
+  if (!data.length) throw new Error('Chain không tồn tại')
+  return (data[0].hops ?? []) as Hop[]
 }
 
 async function updateChain(id: string, newHops: Hop[]): Promise<void> {
-  const res = await fetch(`${JSONBIN_BASE}/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Master-Key': JSONBIN_KEY,
-    },
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/truyen_tay_chains?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: API_HEADERS,
     body: JSON.stringify({ hops: newHops }),
   })
   if (!res.ok) throw new Error('Không thể cập nhật chain')
@@ -145,7 +147,7 @@ onMounted(async () => {
   const idParam = route.query.id as string | undefined
   try {
     if (idParam) {
-      binId.value = idParam
+      chainId.value = idParam
       const fetched = await fetchChain(idParam)
       hops.value = fetched
       if (localStorage.getItem(lsKey(idParam))) {
@@ -154,7 +156,7 @@ onMounted(async () => {
       }
     } else {
       const id = await createChain()
-      binId.value = id
+      chainId.value = id
       await router.replace({ query: { id } })
     }
   } catch (e: unknown) {
@@ -166,9 +168,9 @@ onMounted(async () => {
 })
 
 const chainUrl = computed(() => {
-  if (!binId.value) return ''
+  if (!chainId.value) return ''
   const base = window.location.origin + window.location.pathname
-  return `${base}?id=${binId.value}`
+  return `${base}?id=${chainId.value}`
 })
 
 const hopCount = computed(() => hops.value.length)
@@ -183,7 +185,7 @@ async function shareChain() {
       ts: Date.now(),
     }
     const updated = [...hops.value, newHop]
-    await updateChain(binId.value, updated)
+    await updateChain(chainId.value, updated)
     hops.value = updated
     dots.value.push({
       x: youDot.value.x + (Math.random() - 0.5) * 40,
@@ -193,7 +195,7 @@ async function shareChain() {
     })
     comment.value = ''
     shared.value = true
-    localStorage.setItem(lsKey(binId.value), '1')
+    localStorage.setItem(lsKey(chainId.value), '1')
     await copyUrl()
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Đã có lỗi xảy ra'
@@ -314,7 +316,7 @@ function bubbleWidth(text: string): number {
     </div>
 
     <!-- Error -->
-    <div v-else-if="error && !binId" class="flex flex-1 items-center justify-center px-6">
+    <div v-else-if="error && !chainId" class="flex flex-1 items-center justify-center px-6">
       <p class="text-center text-red-400">{{ error }}</p>
     </div>
 
