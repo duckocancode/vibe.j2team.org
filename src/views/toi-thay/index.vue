@@ -107,7 +107,7 @@ function seeded(id: string, salt: number): number {
 
 function noteColor(id: string): string {
   const idx = Math.floor(seeded(id, 4) * NOTE_COLORS.length)
-  return NOTE_COLORS[idx]
+  return NOTE_COLORS[idx] ?? NOTE_COLORS[0] ?? '#fef08a'
 }
 
 function noteStyle(s: Submission) {
@@ -199,11 +199,12 @@ function onBoardPointerMove(e: PointerEvent) {
   if (!prev) return
   activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
   if (activePointers.size === 2) {
-    const pts = [...activePointers.values()]
-    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+    const [p0, p1] = [...activePointers.values()]
+    if (!p0 || !p1) return
+    const dist = Math.hypot(p0.x - p1.x, p0.y - p1.y)
     if (lastPinchDist.value > 0) {
-      const cx = (pts[0].x + pts[1].x) / 2
-      const cy = (pts[0].y + pts[1].y) / 2
+      const cx = (p0.x + p1.x) / 2
+      const cy = (p0.y + p1.y) / 2
       zoomAt(cx, cy, scale.value * (dist / lastPinchDist.value))
     }
     lastPinchDist.value = dist
@@ -326,10 +327,9 @@ function centerOn(s: Submission) {
 }
 
 function centerOnTarget() {
-  if (submissions.value.length === 0) return
   const target =
     (savedId.value && submissions.value.find((s) => s.id === savedId.value)) || submissions.value[0]
-  centerOn(target)
+  if (target) centerOn(target)
 }
 
 async function loadSubmissions() {
