@@ -185,7 +185,7 @@ function shuntingYard(expr: string, scope: Record<string, (...args: number[]) =>
       ops.pop() // remove '('
       // If a function is on top, apply it
       if (ops.length && ops[ops.length - 1]?.t === 'fn') {
-        const fnTok = ops.pop()!
+        const fnTok = ops.pop() as Token & { t: 'fn'; v: string; argCount?: number }
         const fn = scope[fnTok.v]
         if (!fn) throw new Error('Syntax Error')
         const argc = fnTok.argCount ?? 0
