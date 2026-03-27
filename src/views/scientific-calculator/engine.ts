@@ -1,5 +1,224 @@
-import { evaluate, format, pi, e as EULER } from 'mathjs'
 import type { AngleMode, CalcResult } from './types'
+
+// ── Shunting-Yard expression parser (replaces mathjs) ──
+type Token =
+  | { t: 'num'; v: number }
+  | { t: 'op'; v: string }
+  | { t: 'fn'; v: string }
+  | { t: '(' }
+  | { t: ')' }
+  | { t: ',' }
+
+const PREC: Record<string, number> = { '+': 1, '-': 1, '*': 2, '/': 2, '%': 2, '^': 3 }
+const RIGHT_ASSOC = new Set(['^'])
+
+function tokenize(expr: string): Token[] {
+  const tokens: Token[] = []
+  let i = 0
+  while (i < expr.length) {
+    const ch = expr[i]!
+    if (ch === ' ') {
+      i++
+      continue
+    }
+    if (ch === '(') {
+      tokens.push({ t: '(' })
+      i++
+      continue
+    }
+    if (ch === ')') {
+      tokens.push({ t: ')' })
+      i++
+      continue
+    }
+    if (ch === ',') {
+      tokens.push({ t: ',' })
+      i++
+      continue
+    }
+    // Factorial postfix
+    if (ch === '!') {
+      tokens.push({ t: 'op', v: '!' })
+      i++
+      continue
+    }
+    // Number (including scientific notation like 3.14e-5)
+    if (/[\d.]/.test(ch)) {
+      let num = ''
+      while (i < expr.length && /[\d.]/.test(expr[i]!)) num += expr[i++]
+      if (i < expr.length && /[eE]/.test(expr[i]!)) {
+        num += expr[i++]
+        if (i < expr.length && /[+-]/.test(expr[i]!)) num += expr[i++]
+        while (i < expr.length && /\d/.test(expr[i]!)) num += expr[i++]
+      }
+      tokens.push({ t: 'num', v: parseFloat(num) })
+      continue
+    }
+    // Operator
+    if (ch === '+' || ch === '*' || ch === '/' || ch === '^' || ch === '%') {
+      tokens.push({ t: 'op', v: ch })
+      i++
+      continue
+    }
+    // Minus: unary vs binary
+    if (ch === '-') {
+      const prev = tokens[tokens.length - 1]
+      if (!prev || prev.t === 'op' || prev.t === '(' || prev.t === ',') {
+        tokens.push({ t: 'num', v: 0 })
+      }
+      tokens.push({ t: 'op', v: '-' })
+      i++
+      continue
+    }
+    // Function or identifier
+    if (/[a-zA-Z_]/.test(ch)) {
+      let name = ''
+      while (i < expr.length && /[a-zA-Z_\d]/.test(expr[i]!)) name += expr[i++]
+      tokens.push({ t: 'fn', v: name })
+      continue
+    }
+    throw new Error('Syntax Error')
+  }
+  return tokens
+}
+
+function shuntingYard(expr: string, scope: Record<string, (...args: number[]) => number>): number {
+  const tokens = tokenize(expr)
+  const output: number[] = []
+  const ops: (Token & { argCount?: number })[] = []
+
+  function applyOp(op: string) {
+    if (op === '!') {
+      const a = output.pop()
+      if (a === undefined) throw new Error('Syntax Error')
+      if (a < 0 || !Number.isInteger(a) || a > 170) throw new Error('Math Error')
+      let r = 1
+      for (let j = 2; j <= a; j++) r *= j
+      output.push(r)
+      return
+    }
+    const b = output.pop(),
+      a = output.pop()
+    if (a === undefined || b === undefined) throw new Error('Syntax Error')
+    switch (op) {
+      case '+':
+        output.push(a + b)
+        break
+      case '-':
+        output.push(a - b)
+        break
+      case '*':
+        output.push(a * b)
+        break
+      case '/':
+        output.push(a / b)
+        break
+      case '%':
+        output.push(a % b)
+        break
+      case '^':
+        output.push(Math.pow(a, b))
+        break
+      default:
+        throw new Error('Syntax Error')
+    }
+  }
+
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i]!
+    if (tok.t === 'num') {
+      output.push(tok.v)
+    } else if (tok.t === 'fn') {
+      // Check if followed by '(' → function call; otherwise treat as scope constant
+      if (tokens[i + 1]?.t === '(') {
+        ops.push({ ...tok, argCount: 0 })
+      } else {
+        // It's a bare identifier — look up in scope as 0-arg or error
+        const fn = scope[tok.v]
+        if (!fn) throw new Error('Syntax Error')
+        output.push(fn())
+      }
+    } else if (tok.t === ',') {
+      while (ops.length && ops[ops.length - 1]!.t !== '(') {
+        const op = ops.pop()!
+        if (op.t === 'op') applyOp(op.v)
+      }
+      // Increment arg count on the function
+      const fnTok = [...ops].reverse().find((o) => o.t === 'fn')
+      if (fnTok && fnTok.argCount !== undefined) fnTok.argCount++
+    } else if (tok.t === 'op') {
+      if (tok.v === '!') {
+        // Postfix: apply immediately
+        applyOp('!')
+      } else {
+        const p = PREC[tok.v]!
+        while (ops.length) {
+          const top = ops[ops.length - 1]!
+          if (
+            top.t === 'op' &&
+            top.v !== '!' &&
+            PREC[top.v] !== undefined &&
+            (PREC[top.v]! > p || (PREC[top.v]! === p && !RIGHT_ASSOC.has(tok.v)))
+          ) {
+            ops.pop()
+            applyOp(top.v)
+          } else break
+        }
+        ops.push(tok)
+      }
+    } else if (tok.t === '(') {
+      ops.push(tok)
+      // If preceded by a function, set initial arg count to 1 (unless next is ')')
+      if (ops.length >= 2 && ops[ops.length - 2]?.t === 'fn') {
+        const fnTok = ops[ops.length - 2]!
+        if (fnTok.argCount !== undefined) {
+          fnTok.argCount = tokens[i + 1]?.t === ')' ? 0 : 1
+        }
+      }
+    } else if (tok.t === ')') {
+      while (ops.length && ops[ops.length - 1]!.t !== '(') {
+        const op = ops.pop()!
+        if (op.t === 'op') applyOp(op.v)
+        else throw new Error('Syntax Error')
+      }
+      if (!ops.length) throw new Error('Syntax Error')
+      ops.pop() // remove '('
+      // If a function is on top, apply it
+      if (ops.length && ops[ops.length - 1]?.t === 'fn') {
+        const fnTok = ops.pop()!
+        const fn = scope[fnTok.v]
+        if (!fn) throw new Error('Syntax Error')
+        const argc = fnTok.argCount ?? 0
+        const args: number[] = []
+        for (let j = 0; j < argc; j++) {
+          const v = output.pop()
+          if (v === undefined) throw new Error('Syntax Error')
+          args.unshift(v)
+        }
+        output.push(fn(...args))
+      }
+    }
+  }
+
+  while (ops.length) {
+    const op = ops.pop()!
+    if (op.t === '(' || op.t === ')') throw new Error('Syntax Error')
+    if (op.t === 'op') applyOp(op.v)
+    else throw new Error('Syntax Error')
+  }
+
+  if (output.length !== 1) throw new Error('Syntax Error')
+  return output[0]!
+}
+
+function formatNum(value: number, precision: number): string {
+  if (!isFinite(value)) return String(value)
+  const s = value.toPrecision(precision)
+  // toPrecision may return scientific notation for very large/small values
+  if (s.includes('e') || s.includes('E')) return s
+  if (s.includes('.')) return s.replace(/0+$/, '').replace(/\.$/, '')
+  return s
+}
 
 let angleMode: AngleMode = 'DEG'
 let ans = 0
@@ -41,14 +260,14 @@ export function getPreAns(): number {
 }
 
 export function toRad(x: number): number {
-  if (angleMode === 'DEG') return (x * pi) / 180
-  if (angleMode === 'GRA') return (x * pi) / 200
+  if (angleMode === 'DEG') return (x * Math.PI) / 180
+  if (angleMode === 'GRA') return (x * Math.PI) / 200
   return x
 }
 
 export function fromRad(x: number): number {
-  if (angleMode === 'DEG') return (x * 180) / pi
-  if (angleMode === 'GRA') return (x * 200) / pi
+  if (angleMode === 'DEG') return (x * 180) / Math.PI
+  if (angleMode === 'GRA') return (x * 200) / Math.PI
   return x
 }
 
@@ -199,13 +418,13 @@ function preprocess(expr: string): string {
   let s = expr
   s = s.replace(/×/g, '*')
   s = s.replace(/÷/g, '/')
-  s = s.replace(/π/g, `(${pi})`)
+  s = s.replace(/π/g, `(${Math.PI})`)
   s = s.replace(/PreAns/g, `(${preAns})`)
   s = s.replace(/Ans/g, `(${ans})`)
   for (const [k, v] of Object.entries(vars)) {
     s = s.replace(new RegExp(`(?<![a-zA-Z])${k}(?![a-zA-Z(])`, 'g'), `(${v})`)
   }
-  s = s.replace(/(?<![a-zA-Z\d])e(?![a-zA-Z(])/g, `(${EULER})`)
+  s = s.replace(/(?<![a-zA-Z\d])e(?![a-zA-Z(])/g, `(${Math.E})`)
   s = s.replace(/\bmod\b/gi, ' % ')
   // Implicit multiplication
   s = s.replace(/(\d)\s*([a-zA-Z])/g, '$1*$2')
@@ -294,7 +513,7 @@ function buildScope(): Record<string, (...args: number[]) => number> {
 
 export function formatResult(value: number): string {
   if (Number.isInteger(value) && Math.abs(value) < 1e15) return String(value)
-  const s = format(value, { precision: 10 })
+  const s = formatNum(value, 10)
   if (s.includes('.') && !s.includes('e')) {
     return s.replace(/0+$/, '').replace(/\.$/, '')
   }
@@ -306,7 +525,7 @@ export function calc(expression: string): CalcResult {
   if (!trimmed) return { ok: false, error: 'Syntax Error' }
   try {
     const processed = preprocess(trimmed)
-    const result = evaluate(processed, buildScope()) as number
+    const result = shuntingYard(processed, buildScope())
     if (typeof result !== 'number' || !isFinite(result)) {
       return { ok: false, error: 'Math Error' }
     }
